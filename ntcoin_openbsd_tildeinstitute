@@ -17,8 +17,11 @@ then
 #define TCOIN_PASS_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/passwords/"
 #define TCOIN_PROG_ACT_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/program_accounting/"
 #define PROG_ACT_W_SLASH "program_accounting/"
+#define LS_PATH "/bin/ls"
+#define PCOIN_NEW_KEY_CMD "/bin/cat /dev/urandom | /usr/local/bin/gbase64 | /usr/local/bin/ghead -c 64 | /usr/bin/tr '+' '-' | /usr/bin/tr '/' '_'"
+#define PIPED_WORD_COUNT_CMD " | /usr/bin/wc -c"
+#define PCOIN_KEY_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/secrets/pcoin_keys"
 #define PCOIN_KEY_PATH_W_SLASH "'`/usr/local/bin/grealpath -s $1`'/tcoin/secrets/pcoin_keys/"
-#define LS_PCOIN_KEY_CMD "/bin/ls '`/usr/local/bin/grealpath -s $1`'/tcoin/secrets/pcoin_keys"
 #define TCOIN_CODEZ_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/secrets/tcoin_codez"
 #define TCOIN_BIN_PATH_W_SPACE "'`/usr/local/bin/grealpath -s $2`'/tcoin "
 #define TCOIN_PATH_W_SLASH "'`/usr/local/bin/grealpath -s $1`'/tcoin/"
@@ -26,6 +29,8 @@ then
 #define PCOIN_BIN_PATH "'`/usr/local/bin/grealpath -s $2`'/pcoin"
 #define PCOIN_BIN_PATH_W_SPACE "'`/usr/local/bin/grealpath -s $2`'/pcoin "
 #define TCOIN_HOST_NAME "'$3'"
+#define TCOIN_ERR_CONTACT_EMAIL "login@tilde.town (town-only) or login@tilde.team (internet-wide)"                   )
+#define TCOIN_PASS_RESET_CONTACT_EMAIL "`login@tilde.town` (tilde.town local email) or `login@tilde.team` (internet-wide email), or `/query login` on IRC"
 #define KROWBAR_OFF
 #define DA_OFF
 #define MINERCOIN_OFF
@@ -125,7 +130,7 @@ else
       /bin/echo "Sorry, '`/usr/local/bin/grealpath -s $1`/tcoin/secrets/tcoin_codez' already exists."
       exit 1
     else
-      /bin/echo "`cat /dev/urandom | gbase64 | ghead -c 512 | tr -d '\n' | tr '+' '-' | tr '/' '_'` `cat /dev/urandom | gbase64 | ghead -c 512 | tr -d '\n' | tr '+' '-' | tr '/' '_'`" > "`/usr/local/bin/grealpath -s $1`/tcoin/secrets/tcoin_codez"
+      /bin/echo "`cat /dev/urandom | gbase64 | ghead -c 512 | tr -d '\n' | tr '+' '-' | tr '/' '_'` `cat /dev/urandom | gbase64 | ghead -c 512 | tr -d '\n' | tr '+' '-' | tr '/' '_'` `cat /dev/urandom | gbase64 | ghead -c 512 | tr -d '\n' | tr '+' '-' | tr '/' '_'`" > "`/usr/local/bin/grealpath -s $1`/tcoin/secrets/tcoin_codez"
       /bin/chmod 400 "`/usr/local/bin/grealpath -s $1`/tcoin/secrets/tcoin_codez"
     fi
   fi
@@ -145,6 +150,22 @@ else
       /bin/cp ./scrypt "`/usr/local/bin/grealpath -s $1`/tcoin/bin/scrypt"
       /bin/chmod 500 "`/usr/local/bin/grealpath -s $1`/tcoin/bin/scrypt"
     fi
+    if [ -e "`/usr/local/bin/grealpath -s $1`/tcoin/bin/popen2.c" ]
+    then
+      /bin/echo "Sorry, '`/usr/local/bin/grealpath -s $1`/tcoin/bin/popen2.c' already exists."
+      exit 1
+    else
+      /bin/cp ./popen2.c "`/usr/local/bin/grealpath -s $1`/tcoin/bin/popen2.c"
+      /bin/chmod 440 "`/usr/local/bin/grealpath -s $1`/tcoin/bin/popen2.c"
+    fi
+    if [ -e "`/usr/local/bin/grealpath -s $1`/tcoin/bin/popen2.h" ]
+    then
+      /bin/echo "Sorry, '`/usr/local/bin/grealpath -s $1`/tcoin/bin/popen2.h' already exists."
+      exit 1
+    else
+      /bin/cp ./popen2.h "`/usr/local/bin/grealpath -s $1`/tcoin/bin/popen2.h"
+      /bin/chmod 440 "`/usr/local/bin/grealpath -s $1`/tcoin/bin/popen2.h"
+    fi
     if [ -e "`/usr/local/bin/grealpath -s $1`/tcoin/bin/tcoin_defs.cpp" ]
     then
       /bin/echo "Sorry, '`/usr/local/bin/grealpath -s $1`/tcoin/bin/tcoin_defs.cpp' already exists."
@@ -156,12 +177,17 @@ else
 #define TCOIN_PASS_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/passwords/"
 #define TCOIN_PROG_ACT_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/program_accounting/"
 #define PROG_ACT_W_SLASH "program_accounting/"
+#define LS_PATH "/bin/ls"
+#define PIPED_WORD_COUNT_CMD " | /usr/bin/wc -c"
+#define PCOIN_KEY_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/secrets/pcoin_keys"
 #define PCOIN_KEY_PATH_W_SLASH "'`/usr/local/bin/grealpath -s $1`'/tcoin/secrets/pcoin_keys/"
 #define TCOIN_CODEZ_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/secrets/tcoin_codez"
 #define TCOIN_BIN_PATH_W_SPACE "'`/usr/local/bin/grealpath -s $2`'/tcoin "
 #define TCOIN_PATH_W_SLASH "'`/usr/local/bin/grealpath -s $1`'/tcoin/"
 #define TCOIN_SCRYPT_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/scrypt"
 #define TCOIN_HOST_NAME "'$4'"
+#define TCOIN_ERR_CONTACT_EMAIL "login@tilde.town (town-only) or login@tilde.team (internet-wide)"                   )
+#define TCOIN_PASS_RESET_CONTACT_EMAIL "`login@tilde.town` (tilde.town local email) or `login@tilde.team` (internet-wide email), or `/query login` on IRC"
 #define KROWBAR_OFF
 #define DA_OFF
 #define MINERCOIN_OFF
@@ -179,13 +205,19 @@ else
 #define TCOIN_PASS_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/passwords/"
 #define TCOIN_PROG_ACT_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/program_accounting/"
 #define PROG_ACT_W_SLASH "program_accounting/"
+#define LS_PATH "/bin/ls"
+#define PCOIN_NEW_KEY_CMD "/bin/cat /dev/urandom | /usr/local/bin/gbase64 | /usr/local/bin/ghead -c 64 | /usr/bin/tr '+' '-' | /usr/bin/tr '/' '_'"
+#define PIPED_WORD_COUNT_CMD " | /usr/bin/wc -c"
+#define PCOIN_KEY_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/secrets/pcoin_keys"
 #define PCOIN_KEY_PATH_W_SLASH "'`/usr/local/bin/grealpath -s $1`'/tcoin/secrets/pcoin_keys/"
-#define LS_PCOIN_KEY_CMD "/bin/ls '`/usr/local/bin/grealpath -s $1`'/tcoin/secrets/pcoin_keys"
 #define TCOIN_CODEZ_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/secrets/tcoin_codez"
 #define TCOIN_PATH_W_SLASH "'`/usr/local/bin/grealpath -s $1`'/tcoin/"
 #define TCOIN_SCRYPT_PATH "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/scrypt"
 #define PCOIN_BIN_PATH "'`/usr/local/bin/grealpath -s $2`'/pcoin"
+#define TCOIN_BIN_PATH_W_SPACE "'`/usr/local/bin/grealpath -s $2`'/tcoin "
 #define PCOIN_BIN_PATH_W_SPACE "'`/usr/local/bin/grealpath -s $2`'/pcoin "
+#define TCOIN_ERR_CONTACT_EMAIL "login@tilde.town (town-only) or login@tilde.team (internet-wide)"                   )
+#define TCOIN_PASS_RESET_CONTACT_EMAIL "`login@tilde.town` (tilde.town local email) or `login@tilde.team` (internet-wide email), or `/query login` on IRC"
 #define KROWBAR_OFF
 #define DA_OFF
 #define MINERCOIN_OFF
@@ -198,7 +230,7 @@ else
       exit 1
     else
       /bin/echo '#!/usr/local/bin/bash
-(/usr/local/bin/eg++ -I"'`/usr/local/bin/grealpath -s $1`'/tcoin/bin" "'`/bin/pwd`'/tcoin.cpp" -o "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/tcoin" -std=c++11) \
+(/usr/local/bin/eg++ -I"'`/usr/local/bin/grealpath -s $1`'/tcoin/bin" "'`/bin/pwd`'/tcoin.cpp" "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/popen2.c" -o "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/tcoin" -std=c++11) \
 && (/bin/chmod 550 "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/tcoin") \
 && (/bin/chmod u+s "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/tcoin") \
 && (([ -f "'`/usr/local/bin/grealpath -s $2`'/tcoin" ] && (/bin/chmod u+w "'`/usr/local/bin/grealpath -s $2`'/tcoin")) || /usr/bin/true) \
@@ -208,7 +240,7 @@ else
 && (/bin/cp "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/tcoin_defs.cpp" "'`/usr/local/bin/grealpath -s $2`'/tcoin_defs.cpp")' > "`/usr/local/bin/grealpath -s $1`/tcoin/bin/compile_tcoin"
       /bin/chmod 540 "`/usr/local/bin/grealpath -s $1`/tcoin/bin/compile_tcoin"
       /bin/echo '#!/usr/local/bin/bash
-'`which nano`' "'`/bin/pwd`'/tcoin.cpp"' > "`/usr/local/bin/grealpath -s $1`/tcoin/bin/edit_tcoin"
+'\$EDITOR' "'`/bin/pwd`'/tcoin.cpp"' > "`/usr/local/bin/grealpath -s $1`/tcoin/bin/edit_tcoin"
       /bin/chmod 540 "`/usr/local/bin/grealpath -s $1`/tcoin/bin/edit_tcoin"
       /usr/local/bin/bash "`/usr/local/bin/grealpath -s $1`/tcoin/bin/compile_tcoin"
       /bin/ln -s "`/usr/local/bin/grealpath -s $1`/tcoin/bin/compile_tcoin" ~/"bin/compile_tcoin"
@@ -220,7 +252,7 @@ else
       exit 1
     else
       /bin/echo '#!/usr/local/bin/bash
-(/usr/local/bin/eg++ -I"'`/usr/local/bin/grealpath -s $1`'/tcoin/bin" "'`/bin/pwd`'/pcoin.cpp" -o "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/pcoin" -std=c++11) \
+(/usr/local/bin/eg++ -I"'`/usr/local/bin/grealpath -s $1`'/tcoin/bin" "'`/bin/pwd`'/pcoin.cpp" "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/popen2.c" -o "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/pcoin" -std=c++11) \
 && (/bin/chmod 550 "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/pcoin") \
 && (/bin/chmod u+s "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/pcoin") \
 && (([ -f "'`/usr/local/bin/grealpath -s $2`'/pcoin" ] && (/bin/chmod u+w "'`/usr/local/bin/grealpath -s $2`'/pcoin")) || /usr/bin/true) \
@@ -230,11 +262,15 @@ else
 && (/bin/cp "'`/usr/local/bin/grealpath -s $1`'/tcoin/bin/pcoin_defs.cpp" "'`/usr/local/bin/grealpath -s $2`'/pcoin_defs.cpp")' > "`/usr/local/bin/grealpath -s $1`/tcoin/bin/compile_pcoin"
       /bin/chmod 540 "`/usr/local/bin/grealpath -s $1`/tcoin/bin/compile_pcoin"
       /bin/echo '#!/usr/local/bin/bash
-'`which nano`' "'`/bin/pwd`'/pcoin.cpp"' > "`/usr/local/bin/grealpath -s $1`/tcoin/bin/edit_pcoin"
+'\$EDITOR' "'`/bin/pwd`'/pcoin.cpp"' > "`/usr/local/bin/grealpath -s $1`/tcoin/bin/edit_pcoin"
       /bin/chmod 540 "`/usr/local/bin/grealpath -s $1`/tcoin/bin/edit_pcoin"
       /usr/local/bin/bash "`/usr/local/bin/grealpath -s $1`/tcoin/bin/compile_pcoin"
       /bin/ln -s "`/usr/local/bin/grealpath -s $1`/tcoin/bin/compile_pcoin" ~/"bin/compile_pcoin"
       /bin/ln -s "`/usr/local/bin/grealpath -s $1`/tcoin/bin/edit_pcoin" ~/"bin/edit_pcoin"
     fi
+    /bin/echo '#!/usr/local/bin/bash
+'\$EDITOR' "'`/bin/pwd`'/pcoin.cpp" "'`/bin/pwd`'/tcoin.cpp"' > "`/usr/local/bin/grealpath -s $1`/tcoin/bin/edit_ptcoin"
+    /bin/chmod 540 "`/usr/local/bin/grealpath -s $1`/tcoin/bin/edit_ptcoin"
+    /bin/ln -s "`/usr/local/bin/grealpath -s $1`/tcoin/bin/edit_ptcoin" ~/"bin/edit_ptcoin"
   fi
 fi

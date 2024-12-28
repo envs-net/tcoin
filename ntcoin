@@ -17,15 +17,20 @@ then
 #define TCOIN_PASS_PATH "'`/usr/bin/realpath -s $1`'/tcoin/passwords/"
 #define TCOIN_PROG_ACT_PATH "'`/usr/bin/realpath -s $1`'/tcoin/program_accounting/"
 #define PROG_ACT_W_SLASH "program_accounting/"
+#define LS_PATH "/bin/ls"
+#define PCOIN_NEW_KEY_CMD "/bin/cat /dev/urandom | /usr/bin/base64 | /usr/bin/head -c 64 | /usr/bin/tr '+' '-' | /usr/bin/tr '/' '_'"
+#define PIPED_WORD_COUNT_CMD " | /usr/bin/wc -c"
+#define PCOIN_KEY_PATH "'`/usr/bin/realpath -s $1`'/tcoin/secrets/pcoin_keys"
 #define PCOIN_KEY_PATH_W_SLASH "'`/usr/bin/realpath -s $1`'/tcoin/secrets/pcoin_keys/"
-#define LS_PCOIN_KEY_CMD "/bin/ls '`/usr/bin/realpath -s $1`'/tcoin/secrets/pcoin_keys"
 #define TCOIN_CODEZ_PATH "'`/usr/bin/realpath -s $1`'/tcoin/secrets/tcoin_codez"
+#define PCOIN_BIN_PATH "'`/usr/bin/realpath -s $2`'/pcoin"
 #define TCOIN_BIN_PATH_W_SPACE "'`/usr/bin/realpath -s $2`'/tcoin "
 #define TCOIN_PATH_W_SLASH "'`/usr/bin/realpath -s $1`'/tcoin/"
 #define TCOIN_SCRYPT_PATH "'`/usr/bin/realpath -s $1`'/tcoin/bin/scrypt"
-#define PCOIN_BIN_PATH "'`/usr/bin/realpath -s $2`'/pcoin"
 #define PCOIN_BIN_PATH_W_SPACE "'`/usr/bin/realpath -s $2`'/pcoin "
 #define TCOIN_HOST_NAME "'$3'"
+#define TCOIN_ERR_CONTACT_EMAIL "login@tilde.town (town-only) or login@tilde.team (internet-wide)"
+#define TCOIN_PASS_RESET_CONTACT_EMAIL "`login@tilde.town` (tilde.town local email) or `login@tilde.team` (internet-wide email), or `/query login` on IRC"
 #define KROWBAR_OFF
 #define DA_OFF
 #define MINERCOIN_OFF'
@@ -124,11 +129,11 @@ else
       /bin/echo "Sorry, '`/usr/bin/realpath -s $1`/tcoin/secrets/tcoin_codez' already exists."
       exit 1
     else
-      /bin/echo "`cat /dev/urandom | base64 | head -c 512 | tr -d '\n' | tr '+' '-' | tr '/' '_'` `cat /dev/urandom | base64 | head -c 512 | tr -d '\n' | tr '+' '-' | tr '/' '_'`" > "`/usr/bin/realpath -s $1`/tcoin/secrets/tcoin_codez"
+      /bin/echo "`/bin/cat /dev/urandom | base64 | head -c 512 | tr -d '\n' | tr '+' '-' | tr '/' '_'` `/bin/cat /dev/urandom | base64 | head -c 512 | tr -d '\n' | tr '+' '-' | tr '/' '_'` `/bin/cat /dev/urandom | base64 | head -c 512 | tr -d '\n' | tr '+' '-' | tr '/' '_'`" > "`/usr/bin/realpath -s $1`/tcoin/secrets/tcoin_codez"
       /bin/chmod 400 "`/usr/bin/realpath -s $1`/tcoin/secrets/tcoin_codez"
     fi
   fi
-    if [ -d "`/usr/bin/realpath -s $1`/tcoin/bin" ]
+  if [ -d "`/usr/bin/realpath -s $1`/tcoin/bin" ]
   then
     /bin/echo "Sorry, '`/usr/bin/realpath -s $1`/tcoin/bin' already exists."
     exit 1
@@ -136,6 +141,15 @@ else
     /bin/mkdir "`/usr/bin/realpath -s $1`/tcoin/bin"
     /bin/chmod 700 "`/usr/bin/realpath -s $1`/tcoin/bin"
     /bin/chmod u+s "`/usr/bin/realpath -s $1`/tcoin/bin"
+
+    if [ -d "`/usr/bin/realpath -s $1`/tcoin/bin/x86_64-linux-musl-container" ]
+    then
+      /bin/echo "Sorry, '`/usr/bin/realpath -s $1`/tcoin/bin/x86_64-linux-musl-container' already exists."
+      exit 1
+    else
+      /bin/cat ./x86_64-linux-musl-container.tar.xz* | /usr/bin/tar xJf - -C "`/usr/bin/realpath -s $1`/tcoin/bin/"
+      /bin/chmod -R go-rwx "`/usr/bin/realpath -s $1`/tcoin/bin/x86_64-linux-musl-container"
+    fi
     if [ -e "`/usr/bin/realpath -s $1`/tcoin/bin/scrypt" ]
     then
       /bin/echo "Sorry, '`/usr/bin/realpath -s $1`/tcoin/bin/scrypt' already exists."
@@ -143,6 +157,22 @@ else
     else
       /bin/cp ./scrypt "`/usr/bin/realpath -s $1`/tcoin/bin/scrypt"
       /bin/chmod 500 "`/usr/bin/realpath -s $1`/tcoin/bin/scrypt"
+    fi
+    if [ -e "`/usr/bin/realpath -s $1`/tcoin/bin/popen2.c" ]
+    then
+      /bin/echo "Sorry, '`/usr/bin/realpath -s $1`/tcoin/bin/popen2.c' already exists."
+      exit 1
+    else
+      /bin/cp ./popen2.c "`/usr/bin/realpath -s $1`/tcoin/bin/popen2.c"
+      /bin/chmod 440 "`/usr/bin/realpath -s $1`/tcoin/bin/popen2.c"
+    fi
+    if [ -e "`/usr/bin/realpath -s $1`/tcoin/bin/popen2.h" ]
+    then
+      /bin/echo "Sorry, '`/usr/bin/realpath -s $1`/tcoin/bin/popen2.h' already exists."
+      exit 1
+    else
+      /bin/cp ./popen2.h "`/usr/bin/realpath -s $1`/tcoin/bin/popen2.h"
+      /bin/chmod 440 "`/usr/bin/realpath -s $1`/tcoin/bin/popen2.h"
     fi
     if [ -e "`/usr/bin/realpath -s $1`/tcoin/bin/tcoin_defs.cpp" ]
     then
@@ -155,12 +185,17 @@ else
 #define TCOIN_PASS_PATH "'`/usr/bin/realpath -s $1`'/tcoin/passwords/"
 #define TCOIN_PROG_ACT_PATH "'`/usr/bin/realpath -s $1`'/tcoin/program_accounting/"
 #define PROG_ACT_W_SLASH "program_accounting/"
+#define LS_PATH "/bin/ls"
+#define PIPED_WORD_COUNT_CMD " | /usr/bin/wc -c"
+#define PCOIN_KEY_PATH "'`/usr/bin/realpath -s $1`'/tcoin/secrets/pcoin_keys"
 #define PCOIN_KEY_PATH_W_SLASH "'`/usr/bin/realpath -s $1`'/tcoin/secrets/pcoin_keys/"
 #define TCOIN_CODEZ_PATH "'`/usr/bin/realpath -s $1`'/tcoin/secrets/tcoin_codez"
 #define TCOIN_BIN_PATH_W_SPACE "'`/usr/bin/realpath -s $2`'/tcoin "
 #define TCOIN_PATH_W_SLASH "'`/usr/bin/realpath -s $1`'/tcoin/"
 #define TCOIN_SCRYPT_PATH "'`/usr/bin/realpath -s $1`'/tcoin/bin/scrypt"
 #define TCOIN_HOST_NAME "'$4'"
+#define TCOIN_ERR_CONTACT_EMAIL "login@tilde.town (town-only) or login@tilde.team (internet-wide)"
+#define TCOIN_PASS_RESET_CONTACT_EMAIL "`login@tilde.town` (tilde.town local email) or `login@tilde.team` (internet-wide email), or `/query login` on IRC"
 #define KROWBAR_OFF
 #define DA_OFF
 #define MINERCOIN_OFF' > "`/usr/bin/realpath -s $1`/tcoin/bin/tcoin_defs.cpp"
@@ -177,13 +212,19 @@ else
 #define TCOIN_PASS_PATH "'`/usr/bin/realpath -s $1`'/tcoin/passwords/"
 #define TCOIN_PROG_ACT_PATH "'`/usr/bin/realpath -s $1`'/tcoin/program_accounting/"
 #define PROG_ACT_W_SLASH "program_accounting/"
+#define LS_PATH "/bin/ls"
+#define PCOIN_NEW_KEY_CMD "/bin/cat /dev/urandom | /usr/bin/base64 | /usr/bin/head -c 64 | /usr/bin/tr '+' '-' | /usr/bin/tr '/' '_'"
+#define PIPED_WORD_COUNT_CMD " | /usr/bin/wc -c"
+#define PCOIN_KEY_PATH "'`/usr/bin/realpath -s $1`'/tcoin/secrets/pcoin_keys"
 #define PCOIN_KEY_PATH_W_SLASH "'`/usr/bin/realpath -s $1`'/tcoin/secrets/pcoin_keys/"
-#define LS_PCOIN_KEY_CMD "/bin/ls '`/usr/bin/realpath -s $1`'/tcoin/secrets/pcoin_keys"
 #define TCOIN_CODEZ_PATH "'`/usr/bin/realpath -s $1`'/tcoin/secrets/tcoin_codez"
 #define TCOIN_PATH_W_SLASH "'`/usr/bin/realpath -s $1`'/tcoin/"
 #define TCOIN_SCRYPT_PATH "'`/usr/bin/realpath -s $1`'/tcoin/bin/scrypt"
 #define PCOIN_BIN_PATH "'`/usr/bin/realpath -s $2`'/pcoin"
+#define TCOIN_BIN_PATH_W_SPACE "'`/usr/bin/realpath -s $2`'/tcoin "
 #define PCOIN_BIN_PATH_W_SPACE "'`/usr/bin/realpath -s $2`'/pcoin "
+#define TCOIN_ERR_CONTACT_EMAIL "login@tilde.town (town-only) or login@tilde.team (internet-wide)"
+#define TCOIN_PASS_RESET_CONTACT_EMAIL "`login@tilde.town` (tilde.town local email) or `login@tilde.team` (internet-wide email), or `/query login` on IRC"
 #define KROWBAR_OFF
 #define DA_OFF
 #define MINERCOIN_OFF' > "`/usr/bin/realpath -s $1`/tcoin/bin/pcoin_defs.cpp"
@@ -195,7 +236,7 @@ else
       exit 1
     else
       /bin/echo '#!/bin/bash
-(/usr/bin/g++ -I"'`/usr/bin/realpath -s $1`'/tcoin/bin" "'`/bin/pwd`'/tcoin.cpp" -o "'`/usr/bin/realpath -s $1`'/tcoin/bin/tcoin" -std=c++11) \
+(/usr/bin/g++ -I"'`/usr/bin/realpath -s $1`'/tcoin/bin" "'`/bin/pwd`'/tcoin.cpp" "'`/usr/bin/realpath -s $1`'/tcoin/bin/popen2.c" -o "'`/usr/bin/realpath -s $1`'/tcoin/bin/tcoin" -std=c++11) \
 && (/bin/chmod 550 "'`/usr/bin/realpath -s $1`'/tcoin/bin/tcoin") \
 && (/bin/chmod u+s "'`/usr/bin/realpath -s $1`'/tcoin/bin/tcoin") \
 && (([ -f "'`/usr/bin/realpath -s $2`'/tcoin" ] && (/bin/chmod u+w "'`/usr/bin/realpath -s $2`'/tcoin")) || /bin/true) \
@@ -205,7 +246,7 @@ else
 && (/bin/cp "'`/usr/bin/realpath -s $1`'/tcoin/bin/tcoin_defs.cpp" "'`/usr/bin/realpath -s $2`'/tcoin_defs.cpp")' > "`/usr/bin/realpath -s $1`/tcoin/bin/compile_tcoin"
       /bin/chmod 540 "`/usr/bin/realpath -s $1`/tcoin/bin/compile_tcoin"
       /bin/echo '#!/bin/bash
-'`which nano`' "'`/bin/pwd`'/tcoin.cpp"' > "`/usr/bin/realpath -s $1`/tcoin/bin/edit_tcoin"
+'\$EDITOR' "'`/bin/pwd`'/tcoin.cpp"' > "`/usr/bin/realpath -s $1`/tcoin/bin/edit_tcoin"
       /bin/chmod 540 "`/usr/bin/realpath -s $1`/tcoin/bin/edit_tcoin"
       /bin/bash "`/usr/bin/realpath -s $1`/tcoin/bin/compile_tcoin"
       /bin/ln -s "`/usr/bin/realpath -s $1`/tcoin/bin/compile_tcoin" ~/"bin/compile_tcoin"
@@ -217,7 +258,7 @@ else
       exit 1
     else
       /bin/echo '#!/bin/bash
-(/usr/bin/g++ -I"'`/usr/bin/realpath -s $1`'/tcoin/bin" "'`/bin/pwd`'/pcoin.cpp" -o "'`/usr/bin/realpath -s $1`'/tcoin/bin/pcoin" -std=c++11) \
+(/usr/bin/g++ -I"'`/usr/bin/realpath -s $1`'/tcoin/bin" "'`/bin/pwd`'/pcoin.cpp" "'`/usr/bin/realpath -s $1`'/tcoin/bin/popen2.c" -o "'`/usr/bin/realpath -s $1`'/tcoin/bin/pcoin" -std=c++11) \
 && (/bin/chmod 550 "'`/usr/bin/realpath -s $1`'/tcoin/bin/pcoin") \
 && (/bin/chmod u+s "'`/usr/bin/realpath -s $1`'/tcoin/bin/pcoin") \
 && (([ -f "'`/usr/bin/realpath -s $2`'/pcoin" ] && (/bin/chmod u+w "'`/usr/bin/realpath -s $2`'/pcoin")) || /bin/true) \
@@ -227,11 +268,15 @@ else
 && (/bin/cp "'`/usr/bin/realpath -s $1`'/tcoin/bin/pcoin_defs.cpp" "'`/usr/bin/realpath -s $2`'/pcoin_defs.cpp")' > "`/usr/bin/realpath -s $1`/tcoin/bin/compile_pcoin"
       /bin/chmod 540 "`/usr/bin/realpath -s $1`/tcoin/bin/compile_pcoin"
       /bin/echo '#!/bin/bash
-'`which nano`' "'`/bin/pwd`'/pcoin.cpp"' > "`/usr/bin/realpath -s $1`/tcoin/bin/edit_pcoin"
+'\$EDITOR' "'`/bin/pwd`'/pcoin.cpp"' > "`/usr/bin/realpath -s $1`/tcoin/bin/edit_pcoin"
       /bin/chmod 540 "`/usr/bin/realpath -s $1`/tcoin/bin/edit_pcoin"
       /bin/bash "`/usr/bin/realpath -s $1`/tcoin/bin/compile_pcoin"
       /bin/ln -s "`/usr/bin/realpath -s $1`/tcoin/bin/compile_pcoin" ~/"bin/compile_pcoin"
       /bin/ln -s "`/usr/bin/realpath -s $1`/tcoin/bin/edit_pcoin" ~/"bin/edit_pcoin"
     fi
+    /bin/echo '#!/bin/bash
+'\$EDITOR' "'`/bin/pwd`'/pcoin.cpp" "'`/bin/pwd`'/tcoin.cpp"' > "`/usr/bin/realpath -s $1`/tcoin/bin/edit_ptcoin"
+    /bin/chmod 540 "`/usr/bin/realpath -s $1`/tcoin/bin/edit_ptcoin"
+    /bin/ln -s "`/usr/bin/realpath -s $1`/tcoin/bin/edit_ptcoin" ~/"bin/edit_ptcoin"
   fi
 fi

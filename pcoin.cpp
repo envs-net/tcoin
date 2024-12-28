@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <ctime>
 #include <unistd.h>
-
+#include "popen2.h"
 //set to 1 to enable some debug std::cout statements
 #define DEBUG 0
 
@@ -29,6 +29,7 @@
 #define TCOIN_PROG_ACT_PATH "/home/login/tcoin/program_accounting/"
 #define PROG_ACT_W_SLASH "program_accounting/"
 #define PCOIN_KEY_PATH_W_SLASH "/home/login/bin/pcoin_keys/"
+#define PCOIN_NEW_KEY_CMD "/bin/cat /dev/urandom | /usr/bin/base64 | /usr/bin/head -c 64 | /usr/bin/tr '+' '-' | /usr/bin/tr '/' '_'"
 #define LS_PCOIN_KEY_CMD "/bin/ls /home/login/bin/pcoin_keys"
 #define TCOIN_CODEZ_PATH "/home/login/bin/tcoin_codez"
 #define TCOIN_BIN_PATH_W_SPACE "/home/login/bin/tcoin "
@@ -41,14 +42,18 @@
 
 #define LS_HOME_CMD "/bin/ls /home"
 #define BIN_ECHO_CMD "/bin/echo $$"
+#define CHMOD_PERMISSIONS ((S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO)
+#define CHMOD_PROGRAM_KEY_PERMISSIONS (S_IRUSR & ~S_IWUSR & ~S_IXUSR & ~S_IRWXG & ~S_IRWXO)
 #ifndef KROWBAR_OFF
   #define KROWBAR_SCORE_PATH "/home/krowbar/Code/irc/data/tildescores.txt"
+  #define JU_SCORE_PATH "/home/jmjl/dev/juju/data/tildescores.txt"
 #endif
 #ifndef DA_OFF
   #define TROIDO_DACOINS_CMD "cd /home/troido/daily_adventure/client/ && /home/troido/daily_adventure/client/daclient printinfo 2>&1 | /bin/grep -oP '(?<=\"Coins\", )\[[:digit:]]+'"
 #endif
 #ifndef MINERCOIN_OFF
   #define MINERCOIN_CMD_PRE_USERNAME "/bin/grep -oP '(?<=\"~"
+  #define MINERCOIN_CMD_PRE_USERNAME2 "/bin/grep -oP '(?<=\""
   #define MINERCOIN_CMD_POST_USERNAME "\": )[[:digit:]]+' /home/minerobber/Code/minerbot/minercoin.json"
 #endif
 #define USERNAME_LENGTH_LIMIT 25
@@ -66,10 +71,13 @@
 #define ERR_INSUFFICIENT_FUNDS 3
 #define ERR_RECEIVER_NOT_FOUND 1
 
+#define ERR_PCOIN_KEY_REFRESH_FAILED 20
+
 #define ERR_IN_GET_INTERNAL_BALANCE -1
 #define ERR_IN_ADD_INTERNAL_BALANCE_GET_INTERNAL_TOTAL_OWED_FAILED -3
 #define ERR_ADD_INTERNAL_BALANCE_VALUE_TO_ADD_UNFULFILLABLE_USING_OWN_CURRENT_FUNDS -1
 #define ERR_ADD_INTERNAL_BALANCE_USERNAME_DOESNT_EXIST -2
+#define ERR_ADD_INTERNAL_BALANCE_ADD_TO_SELF -4
 #define ERR_ADD_FILE_VALUE_INSUFFICIENT_FUNDS 1
 #define ERR_ADD_FILE_VALUE_FATAL 999
 #define ERR_IN_GET_INTERNAL_TOTAL_OWED_SELF_PROGRAM_DOESNT_EXIST -1
@@ -80,6 +88,7 @@
 #define ERR_SEND_MESSAGE_SENDER_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL 102
 #define ERR_SEND_MESSAGE_SENDER_PROGRAM_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL 104
 
+#define ERR_KEY_EMPTY 22
 #define ERR_KEY_NOT_IN_USE 9
 #define ERR_NO_ARGS 8
 #define ERR_IN_MAIN_GET_INTERNAL_TOTAL_OWED_FAILED 18
@@ -91,6 +100,7 @@
 #define ERR_IN_MAIN_ADD_INTERNAL_BALANCE_AMOUNT_LARGER_THAN_COVERABLE_BY_UNOWED_BALANCE 14
 #define ERR_IN_MAIN_ADD_INTERNAL_BALANCE_AMOUNT_MAKING_USER_INTERNAL_BALANCE_NEGATIVE 16
 #define ERR_IN_MAIN_ADD_INTERNAL_BALANCE_NO_SUCH_USERNAME_FOUND 15
+#define ERR_IN_MAIN_ADD_INTERNAL_BALANCE_ADD_TO_SELF 21
 
 void exit_program(const int error_number)
 {
@@ -213,15 +223,59 @@ int strctcmp(const char*a, const char*b)
 }
 
 std::string exec(const char* cmd) {
+  int i=0;
+  do
+  {
     std::array<char, 128> buffer;
     std::string result;
-    std::shared_ptr<FILE> pipe(popen(cmd, "r"), pclose);
-    if (!pipe) throw std::runtime_error("popen() failed!");
-    while (!feof(pipe.get())) {
-        if (fgets(buffer.data(), 128, pipe.get()) != nullptr)
-            result += buffer.data();
+    try
+    {
+      std::shared_ptr<FILE> pipe(popen(cmd, "r"), pclose);
+      if (!pipe)
+      {
+        ++i;
+        std::cout << "popen() failed - " << i << std::endl;
+        continue;
+      }
+
+      while (!feof(pipe.get())) {
+          if (fgets(buffer.data(), 128, pipe.get()) != nullptr)
+              result += buffer.data();
+      }
+      return result;
     }
-    return result;
+    catch (const std::exception& e)
+    {
+      ++i;
+      std::cout << "popen() failed - " << i << " (exception " << e.what() << ")" << std::endl;
+      continue;
+    }
+  } while(i < 100);
+
+  throw std::runtime_error("popen() failed!");
+  return std::string(""); //dummy line, never executes
+}
+
+std::string exec2(const char* cmd, std::string input) {
+  std::string data_length_cmd_str = std::string(cmd) + std::string(PIPED_WORD_COUNT_CMD);
+  const char* data_length_cmd_cstr = data_length_cmd_str.c_str();
+  std::string data_length_str = exec(data_length_cmd_cstr);
+  long long int data_length = strtol_fast(data_length_str.c_str())+1;
+  std::vector <char> buffer;
+  buffer.reserve(data_length);
+  std::string result;
+  files_t *fp = popen2(cmd);
+  if (!fp) throw std::runtime_error("popen2() failed!");
+
+  fputs((input+std::string("\n")).c_str(), fp->in);
+  std::fflush(fp->in);
+
+  while (!feof(fp->out)) {
+      if (fgets(buffer.data(), data_length, fp->out) != nullptr)
+        result += buffer.data();
+  }
+  pclose2(fp);
+  return result;
 }
 
 long long int get_file_value(const char* file_name)
@@ -302,11 +356,11 @@ int add_file_value(const char* file_name, const long long int &value_to_add, con
   file2 << new_value << "\n";
   file2.close();
 
-  chmod(temp_file_path, (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+  chmod(temp_file_path, CHMOD_PERMISSIONS);
 
   if(!file2) //error
   {
-    std::cerr << "Fatal error " << ERR_ADD_FILE_VALUE_FATAL << ": the file \"" << file_name << "\" was unable to be updated. Please contact login@tilde.town (town-only) or login@tilde.team (internet-wide to report this error (because it requires manual recovery).";
+    std::cerr << "Fatal error " << ERR_ADD_FILE_VALUE_FATAL << ": the file \"" << file_name << "\" was unable to be updated. Please contact " << TCOIN_ERR_CONTACT_EMAIL << " to report this error (because it requires manual recovery).";
     exit_program(ERR_ADD_FILE_VALUE_FATAL);
   }
   else
@@ -316,7 +370,7 @@ int add_file_value(const char* file_name, const long long int &value_to_add, con
     {
       if(!std::rename(temp_file_path, file_path))
       {
-        chmod(file_path, (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+        chmod(file_path, CHMOD_PERMISSIONS);
         break;
       }
     }
@@ -332,7 +386,7 @@ std::string get_username()
 {
   return global_username;
 }
-int set_username(std::string &username)
+int set_username(const std::string &username)
 {
   global_username.assign(username);
   return 0;
@@ -370,23 +424,24 @@ void cout_formatted_amount(long long int const& amount, char const* appended_cha
 
 long long int base_amount;
 long long int user_amount;
-long long int krowbar_amount; //krowbar's tilde game amount
-long long int minercoin_amount; //minerobber's !minercoin game amount
+long long int krowbar_amount[2]; //krowbar's tilde game amount
+long long int minercoin_amount[2]; //minerobber's !minercoin game amount (tilded ~username entry and non-tilded username entry, both)
 
-void show_breakdown(const long long int &amount0 = 0, char const* amount0_source = "", const long long int &amount1 = 0, char const* amount1_source = "", const long long int &amount2 = 0, char const* amount2_source = "", const long long int &amount3 = 0, char const* amount3_source = "", const long long int &amount4 = 0, char const* amount4_source = "")
+void show_breakdown(const long long int &amount0 = 0, char const* amount0_source = "", const long long int &amount1 = 0, char const* amount1_source = "", const long long int &amount2 = 0, char const* amount2_source = "", const long long int &amount3 = 0, char const* amount3_source = "", const long long int &amount4 = 0, char const* amount4_source = "", const long long int &amount5 = 0, char const* amount5_source = "")
 {
   bool a0 = (amount0 != 0 && strcmp(amount0_source, ""));
   bool a1 = (amount1 != 0 && strcmp(amount1_source, ""));
   bool a2 = (amount2 != 0 && strcmp(amount2_source, ""));
   bool a3 = (amount3 != 0 && strcmp(amount3_source, ""));
   bool a4 = (amount4 != 0 && strcmp(amount4_source, ""));
-  if(a0 || a1 || a2 || a3 || a4)
+  bool a5 = (amount5 != 0 && strcmp(amount5_source, ""));
+  if(a0 || a1 || a2 || a3 || a4 || a5)
   {
     if(a0)
     {
       std::cout << amount0_source << ",";
       cout_formatted_amount(amount0);
-      if(a1 || a2 || a3 || a4)
+      if(a1 || a2 || a3 || a4 || a5)
       {
         std::cout << ";";
       }
@@ -395,7 +450,7 @@ void show_breakdown(const long long int &amount0 = 0, char const* amount0_source
     {
       std::cout << amount1_source << ",";
       cout_formatted_amount(amount1);
-      if(a2 || a3 || a4)
+      if(a2 || a3 || a4 || a5)
       {
         std::cout << ";";
       }
@@ -404,7 +459,7 @@ void show_breakdown(const long long int &amount0 = 0, char const* amount0_source
     {
       std::cout << amount2_source << ",";
       cout_formatted_amount(amount2);
-      if(a3 || a4)
+      if(a3 || a4 || a5)
       {
         std::cout << ";";
       }
@@ -413,7 +468,7 @@ void show_breakdown(const long long int &amount0 = 0, char const* amount0_source
     {
       std::cout << amount3_source << ",";
       cout_formatted_amount(amount3);
-      if(a4)
+      if(a4 || a5)
       {
         std::cout << ";";
       }
@@ -422,6 +477,15 @@ void show_breakdown(const long long int &amount0 = 0, char const* amount0_source
     {
       std::cout << amount4_source << ",";
       cout_formatted_amount(amount4);
+      if(a5)
+      {
+        std::cout << ";";
+      }
+    }
+    if(a5)
+    {
+      std::cout << amount5_source << ",";
+      cout_formatted_amount(amount5);
     }
     std::cout << "\n";
   }
@@ -583,6 +647,93 @@ bool program_exists(const char* username)
   return return_value;
 }
 
+std::string refresh_pcoin_key()
+{
+  std::string new_key;
+  const std::string username = get_username();
+  char* program_key_path = new char[username.length() + sizeof(PCOIN_KEY_PATH_W_SLASH) + 4]; //sizeof counts NULL char at the end too
+  char* temp_program_key_path = new char[username.length() + sizeof(PCOIN_KEY_PATH_W_SLASH) + 8]; //sizeof counts NULL char at the end too
+  char* temp2_program_key_path = new char[username.length() + sizeof(PCOIN_KEY_PATH_W_SLASH) + 9]; //sizeof counts NULL char at the end too
+
+  std::strcpy(program_key_path, PCOIN_KEY_PATH_W_SLASH);
+  std::strcat(program_key_path, username.c_str());
+  std::strcpy(temp_program_key_path, program_key_path);
+  std::strcpy(temp2_program_key_path, program_key_path);
+  std::strcat(program_key_path, ".txt");
+  std::strcat(temp_program_key_path, "_tmp.txt");
+  std::strcat(temp2_program_key_path, "_tmp2.txt");
+
+  std::ifstream fin(program_key_path);
+
+  if(!fin)
+  {
+    delete[] program_key_path;
+    delete[] temp_program_key_path;
+    delete[] temp2_program_key_path;
+    return std::string("n/a");
+  }
+
+  fin.close();
+
+  if(!std::rename(program_key_path, temp_program_key_path))
+  {
+    chmod(temp_program_key_path, CHMOD_PERMISSIONS);
+    std::ofstream fin2(temp2_program_key_path);
+
+    if(!fin2)
+    {
+      fin2.close();
+      while(1)
+      {
+        if(!std::rename(temp_program_key_path, program_key_path))
+        {
+          chmod(program_key_path, CHMOD_PROGRAM_KEY_PERMISSIONS);
+          break;
+        }
+      }
+      delete[] temp2_program_key_path;
+      delete[] temp_program_key_path;
+      delete[] program_key_path;
+      return std::string("n/a");
+    }
+
+    new_key = exec(PCOIN_NEW_KEY_CMD);
+    fin2 << new_key << "\n";
+    fin2.close();
+    chmod(temp2_program_key_path, CHMOD_PROGRAM_KEY_PERMISSIONS);
+
+    while(1)
+    {
+      if(!std::rename(temp2_program_key_path, program_key_path))
+      {
+        chmod(program_key_path, CHMOD_PROGRAM_KEY_PERMISSIONS);
+        while(1)
+        {
+          if(!std::remove(temp_program_key_path))
+            break;
+        }
+        break;
+      }
+    }
+    delete[] program_key_path;
+    delete[] temp_program_key_path;
+    delete[] temp2_program_key_path;
+    return new_key;
+  }
+  else
+  {
+    delete[] program_key_path;
+    delete[] temp_program_key_path;
+    delete[] temp2_program_key_path;
+    return std::string("n/a");
+  }
+
+  delete[] program_key_path;
+  delete[] temp_program_key_path;
+  delete[] temp2_program_key_path;
+  return std::string("n/a");
+}
+
 bool username_exists(const char* username)
 {
   const static std::string all_usernames = exec(LS_HOME_CMD);
@@ -679,7 +830,7 @@ int send_message(const char* sender_username, const char* receiver_username, con
   fin2.close();
   fin3.close();
 
-  chmod(receiver_path, (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+  chmod(receiver_path, CHMOD_PERMISSIONS);
 
   delete[] receiver_salt_path;
   delete[] receiver_salt_logged_in_path;
@@ -739,11 +890,11 @@ int send_message(const char* sender_username, const char* receiver_username, con
         fout << "\n\n";
       }
       fout.close();
-      chmod(really_temp_receiver_path, (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+      chmod(really_temp_receiver_path, CHMOD_PERMISSIONS);
 
       if(!fout) //error
       {
-        std::cerr << "Fatal error " << ERR_SEND_MESSAGE_RECEIVER_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL << ": the receiver message file was unable to be updated. Please contact login@tilde.town (town-only) or login@tilde.team (internet-wide to report this error (because it requires manual recovery).";
+        std::cerr << "Fatal error " << ERR_SEND_MESSAGE_RECEIVER_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL << ": the receiver message file was unable to be updated. Please contact " << TCOIN_ERR_CONTACT_EMAIL << " to report this error (because it requires manual recovery).";
         exit_program(ERR_SEND_MESSAGE_RECEIVER_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL);
       }
       else
@@ -764,7 +915,7 @@ int send_message(const char* sender_username, const char* receiver_username, con
           break;
       }
 
-      chmod(receiver_path, (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+      chmod(receiver_path, CHMOD_PERMISSIONS);
 
       delete[] really_temp_receiver_path;
       delete[] temp_receiver_path;
@@ -792,7 +943,7 @@ int send_message(const char* sender_username, const char* receiver_username, con
           else
             fin.close();
           fin2.close();
-          chmod(program_receiver_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+          chmod(program_receiver_path.c_str(), CHMOD_PERMISSIONS);
         }
 
         while(1)
@@ -830,11 +981,11 @@ int send_message(const char* sender_username, const char* receiver_username, con
               fout << "\n";
             }
             fout.close();
-            chmod(really_temp_program_receiver_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+            chmod(really_temp_program_receiver_path.c_str(), CHMOD_PERMISSIONS);
 
             if(!fout) //error
             {
-              std::cerr << "Fatal error " << ERR_SEND_MESSAGE_PROGRAM_RECEIVER_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL << ": the receiver program_message file was unable to be updated. Please contact login@tilde.town (town-only) or login@tilde.team (internet-wide to report this error (because it requires manual recovery).";
+              std::cerr << "Fatal error " << ERR_SEND_MESSAGE_PROGRAM_RECEIVER_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL << ": the receiver program_message file was unable to be updated. Please contact " TCOIN_ERR_CONTACT_EMAIL " to report this error (because it requires manual recovery).";
               exit_program(ERR_SEND_MESSAGE_PROGRAM_RECEIVER_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL);
             }
             else
@@ -855,7 +1006,7 @@ int send_message(const char* sender_username, const char* receiver_username, con
                 break;
             }
 
-            chmod(program_receiver_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+            chmod(program_receiver_path.c_str(), CHMOD_PERMISSIONS);
             break;
           }//if statement with !std::rename for receiver's program accounting _messages file
         }//while loop for program accounting receiver's _messages file
@@ -887,7 +1038,7 @@ int send_message(const char* sender_username, const char* receiver_username, con
 
           fin.open(temp_sender_path);
           fout.open(really_temp_sender_path);
-          chmod(really_temp_sender_path, (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+          chmod(really_temp_sender_path, CHMOD_PERMISSIONS);
 
           fout << fin.rdbuf();
 
@@ -935,7 +1086,7 @@ int send_message(const char* sender_username, const char* receiver_username, con
 
           if(!fout) //error
           {
-            std::cerr << "Fatal error " << ERR_SEND_MESSAGE_SENDER_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL << ": the sender message file was unable to be updated. Please contact login@tilde.town (town-only) or login@tilde.team (internet-wide to report this error (because it requires manual recovery).";
+            std::cerr << "Fatal error " << ERR_SEND_MESSAGE_SENDER_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL << ": the sender message file was unable to be updated. Please contact " << TCOIN_ERR_CONTACT_EMAIL << " to report this error (because it requires manual recovery).";
             exit_program(ERR_SEND_MESSAGE_SENDER_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL);
           }
           else
@@ -981,7 +1132,7 @@ int send_message(const char* sender_username, const char* receiver_username, con
               else
                 fin.close();
               fin2.close();
-              chmod(program_sender_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+              chmod(program_sender_path.c_str(), CHMOD_PERMISSIONS);
             }
 
             while(1)
@@ -1019,11 +1170,11 @@ int send_message(const char* sender_username, const char* receiver_username, con
                   fout << "\n";
                 }
                 fout.close();
-                chmod(really_temp_program_sender_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+                chmod(really_temp_program_sender_path.c_str(), CHMOD_PERMISSIONS);
 
                 if(!fout) //error
                 {
-                  std::cerr << "Fatal error " << ERR_SEND_MESSAGE_SENDER_PROGRAM_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL << ": the sender program message file was unable to be updated. Please contact login@tilde.town (town-only) or login@tilde.team (internet-wide to report this error (because it requires manual recovery).";
+                  std::cerr << "Fatal error " << ERR_SEND_MESSAGE_SENDER_PROGRAM_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL << ": the sender program message file was unable to be updated. Please contact " << TCOIN_ERR_CONTACT_EMAIL << " to report this error (because it requires manual recovery).";
                   exit_program(ERR_SEND_MESSAGE_SENDER_PROGRAM_MSG_FILE_UNABLE_TO_BE_UPDATED_FATAL);
                 }
                 else
@@ -1044,7 +1195,7 @@ int send_message(const char* sender_username, const char* receiver_username, con
                     break;
                 }
 
-                chmod(program_sender_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+                chmod(program_sender_path.c_str(), CHMOD_PERMISSIONS);
                 break;
               }//if statement with !std::rename for sender's program accounting _messages file
             }//while loop for program accounting sender's _messages file
@@ -1139,7 +1290,7 @@ int send(const char* sender_username, const char* receiver_username, const long 
           else
             fin.close();
           fin2.close();
-          chmod(program_sender_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+          chmod(program_sender_path.c_str(), CHMOD_PERMISSIONS);
         }
 
         while(1)
@@ -1175,7 +1326,7 @@ int send(const char* sender_username, const char* receiver_username, const long 
                 else
                   fin.close();
                 fin2.close();
-                chmod(program_sender_total_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+                chmod(program_sender_total_path.c_str(), CHMOD_PERMISSIONS);
               }
 
               while(1)
@@ -1261,7 +1412,7 @@ int send(const char* sender_username, const char* receiver_username, const long 
                         fin2.close();
                         fin3.close();
 
-                        chmod(receiver_path, (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+                        chmod(receiver_path, CHMOD_PERMISSIONS);
 
                         delete[] receiver_salt_path;
                         delete[] receiver_salt_logged_in_path;
@@ -1295,7 +1446,7 @@ int send(const char* sender_username, const char* receiver_username, const long 
                                 else
                                   fin.close();
                                 fin2.close();
-                                chmod(program_receiver_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+                                chmod(program_receiver_path.c_str(), CHMOD_PERMISSIONS);
                               }
 
                               while(1)
@@ -1326,7 +1477,7 @@ int send(const char* sender_username, const char* receiver_username, const long 
                                       else
                                         fin.close();
                                       fin2.close();
-                                      chmod(program_receiver_total_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+                                      chmod(program_receiver_total_path.c_str(), CHMOD_PERMISSIONS);
                                     }
 
                                     while(1)
@@ -1457,11 +1608,13 @@ void help()
   std::cout << "\n`" << PCOIN_BIN_PATH_W_SPACE << "internal_balance <username>` or `" << PCOIN_BIN_PATH_W_SPACE << "-ib <username>`: print the amount you owe <username>";
   std::cout << "\n`" << PCOIN_BIN_PATH_W_SPACE << "add_internal_balance <username>` or `" << PCOIN_BIN_PATH_W_SPACE << "-aib <username> <amount>`: add <amount> to the amount you owe <username>";
   std::cout << "\n`" << PCOIN_BIN_PATH_W_SPACE << "send <username> <amount>` or `" << PCOIN_BIN_PATH_W_SPACE  << "-s <username> <amount>`: send <amount> tildecoins to <username>";
-  std::cout << "\n`" << PCOIN_BIN_PATH_W_SPACE << "send <username> <amount> \"<message>\"`: optionally, include a message to be sent to <username>";
+  std::cout << "\n`" << PCOIN_BIN_PATH_W_SPACE << "send <username> <amount> \"<message>\"` or `" << PCOIN_BIN_PATH_W_SPACE << "-s <username> <amount> \"<message>\"`: optionally, include a message to be sent to <username>";
   std::cout << "\n`" << PCOIN_BIN_PATH_W_SPACE << "silentsend <username> <amount> [\"<message>\"]`, `" << PCOIN_BIN_PATH_W_SPACE << "send -s <username> <amount> [\"<message>\"]` or `" << PCOIN_BIN_PATH_W_SPACE << "-ss <username> <amount> [\"<message>\"]`: send <amount> tildecoins to <username> with an optional (as indicated by [ and ], which should not be included in the actual comment) message included without printing anything";
+  std::cout << "\n`" << PCOIN_BIN_PATH_W_SPACE << "refresh_key` or `" << PCOIN_BIN_PATH_W_SPACE << "-rk`: generate a new key for your pcoin account and print it";
+  std::cout << "\n`" << PCOIN_BIN_PATH_W_SPACE << "name` or `" << PCOIN_BIN_PATH_W_SPACE << "-n`: print the name on the account";
   std::cout << "\nIn the commands with `<username> <amount>`, switching the two arguments around (i.e., from `<username> <amount>` to `<amount> <username>`) will also work";
   std::cout << "\n`" << PCOIN_BIN_PATH_W_SPACE << "--help`, `" << PCOIN_BIN_PATH_W_SPACE << "help` or `" << PCOIN_BIN_PATH_W_SPACE << "-h`: print this help text";
-  std::cout << "\nSend an email to `login@tilde.town` (tilde.town local email) or `login@tilde.team` (internet-wide email), or `/query login` on IRC to report any errors or request a key for your program.\n\n";
+  std::cout << "\nSend an email to " << TCOIN_PASS_RESET_CONTACT_EMAIL << " to report any errors or request a key for your program.\n\n";
 }
 
 bool is_number(const char* test_string)
@@ -1473,10 +1626,17 @@ bool is_number(const char* test_string)
 
 std::string get_username_from_key(std::string &key)
 {
-  const static std::string all_usernames_dot_txt = exec(LS_PCOIN_KEY_CMD);
+  std::ifstream codefin(TCOIN_CODEZ_PATH);
+  char code1[513], code2[513], code3[513];
+  codefin >> code1;
+  codefin >> code2;
+  codefin >> code3;
+  codefin.close();
+  const static std::string all_usernames_dot_txt = exec2((std::string(TCOIN_BIN_PATH_W_SPACE) + std::string("pcoin_list")).c_str(), std::string(code3));
+
   std::istringstream iss(all_usernames_dot_txt);
 
-  std::string word1, word2;
+  std::string word1, word2, program_name("n/a");
   //first word is program username with .txt on the end, second word is key
   while(iss >> word1)
   {
@@ -1492,14 +1652,15 @@ std::string get_username_from_key(std::string &key)
     {
       fin.close();
       delete[] program_key_path;
-      return word1.substr(0, word1.size()-4); //removing .txt from the username returned
+      program_name = word1.substr(0, word1.size()-4); //removing .txt from the username returned
     }
-    fin.close();
-    delete[] program_key_path;
+    else
+    {
+      fin.close();
+      delete[] program_key_path;
+    }
   }
-
-  word1.assign("n/a");
-  return word1;
+  return program_name;
 }
 
 long long int get_internal_balance(const char* username)
@@ -1523,7 +1684,7 @@ long long int get_internal_balance(const char* username)
       }
       else
         fin.close();
-      chmod(internal_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+      chmod(internal_path.c_str(), CHMOD_PERMISSIONS);
     }
 
     std::string internal_username = std::string(PROG_ACT_W_SLASH) + get_username() + std::string("/") + std::string(username);
@@ -1549,7 +1710,7 @@ long long int get_internal_total_owed()
       }
       else
         fin.close();
-      chmod(internal_total_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+      chmod(internal_total_path.c_str(), CHMOD_PERMISSIONS);
     }
 
     std::string internal_total_username = std::string(PROG_ACT_W_SLASH) + get_username() + std::string("/_TOTAL");
@@ -1560,6 +1721,10 @@ long long int get_internal_total_owed()
 
 int add_internal_balance(const char* username, const long long int value_to_add)
 {
+  if(!strcmp(get_username().c_str(), username))
+  {
+    return ERR_ADD_INTERNAL_BALANCE_ADD_TO_SELF;
+  }
   if(program_exists(get_username().c_str()) && username_exists(username))
   {
     std::string random_string = std::string("rand");
@@ -1594,7 +1759,7 @@ int add_internal_balance(const char* username, const long long int value_to_add)
       else
         fin.close();
       fin2.close();
-      chmod(internal_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+      chmod(internal_path.c_str(), CHMOD_PERMISSIONS);
     }
 
     int return_value;
@@ -1632,7 +1797,7 @@ int add_internal_balance(const char* username, const long long int value_to_add)
             else
               fin.close();
             fin2.close();
-            chmod(internal_total_path.c_str(), (S_IRUSR | S_IWUSR) & ~S_IRWXG & ~S_IRWXO);
+            chmod(internal_total_path.c_str(), CHMOD_PERMISSIONS);
           }
 
           while(1)
@@ -1688,6 +1853,12 @@ int main(int argc, char *argv[])
     std::string program_username;
     std::getline(std::cin, key);
 
+    if(!key.compare(""))
+    {
+      std::cout << "\nSorry, you incorrectly specified an empty key.\n\n";
+      return ERR_KEY_EMPTY;
+    }
+
     program_username.assign(get_username_from_key(key));
 
     if(!program_username.compare("n/a"))
@@ -1701,8 +1872,8 @@ int main(int argc, char *argv[])
   base_amount = 0;
   long long int unaltered_base_amount = base_amount;
   user_amount = 0;
-  krowbar_amount = 0;
-  minercoin_amount = 0;
+  krowbar_amount[0] = krowbar_amount[1] = 0;
+  minercoin_amount[0] = minercoin_amount[1] = 0;
 
   #ifndef KROWBAR_OFF
   //adding tildebot scores from krowbar to base amount
@@ -1710,53 +1881,87 @@ int main(int argc, char *argv[])
     std::string line;
     const std::string username = get_username();
     const int username_length = username.length();
-    std::ifstream fin(KROWBAR_SCORE_PATH);
-    while(std::getline(fin, line))
+
+    std::string score_file_path;
+
+    for(int j=0; j<2; ++j)
     {
-      char* line_c_string = new char[line.length()+1];
-      std::strcpy(line_c_string, line.c_str());
+      if(j == 0)
+        score_file_path.assign(KROWBAR_SCORE_PATH);
+      else if(j == 1)
+        score_file_path.assign(JU_SCORE_PATH);
 
-      const int irc_username_length = username_length > USERNAME_LENGTH_LIMIT ? USERNAME_LENGTH_LIMIT : username_length;
+      std::ifstream fin(score_file_path);
 
-      if(!strncasecmp(username.c_str(), line_c_string, irc_username_length)) //username starts with capital letter, but name in database does not
+      while(std::getline(fin, line))
       {
-        char number_of_tildes[21];
-        number_of_tildes[0] = '0'; //just in case the loop below doesn't detect any digits
-        number_of_tildes[1] = '\0';
+        char* line_c_string = new char[line.length()+1];
+        std::strcpy(line_c_string, line.c_str());
 
-        for(int i=0; i < 20; ++i)
+        const int irc_username_length = username_length > USERNAME_LENGTH_LIMIT ? USERNAME_LENGTH_LIMIT : username_length;
+
+        if(!strncasecmp(username.c_str(), line_c_string, irc_username_length)) //username starts with capital letter, but name in database does not
         {
-          if(std::isdigit(line_c_string[irc_username_length+3+i]))
-            number_of_tildes[i] = line_c_string[irc_username_length+3+i];
-          else
+          char number_of_tildes[21];
+          number_of_tildes[0] = '0'; //just in case the loop below doesn't detect any digits
+          number_of_tildes[1] = '\0';
+
+          for(int i=0; i < 20; ++i)
           {
-            number_of_tildes[i] = '\0'; //manually terminating the string
-            break;
+            if(std::isdigit(line_c_string[irc_username_length+3+i])
+            || line_c_string[irc_username_length+3+i] == '-'
+            || line_c_string[irc_username_length+3+i] == '.')
+              number_of_tildes[i] = line_c_string[irc_username_length+3+i];
+            else
+            {
+              number_of_tildes[i] = '\0'; //manually terminating the string
+              break;
+            }
           }
+          number_of_tildes[20] = '\0'; //incase the number overflows 20 characters
+          krowbar_amount[j] += strtol100(number_of_tildes);
+          base_amount += krowbar_amount[j];
+          //multiplied by 100 inside strtol100() to convert tildecoins to centitildecoins, which
+          //is the unit used throughout the program (and converted appropriately when displayed)
         }
-        number_of_tildes[20] = '\0'; //incase the number overflows 20 characters
-        krowbar_amount += strtol100(number_of_tildes);
-        base_amount += krowbar_amount;
-        //multiplied by 100 inside strtol100() to convert tildecoins to centitildecoins, which
-        //is the unit used throughout the program (and converted appropriately when displayed)
+        delete[] line_c_string;
       }
-      delete[] line_c_string;
     }
   }
   #endif
 
+  #if DEBUG
+    std::string debug_string("");
+  #endif
+
   #ifndef MINERCOIN_OFF
-  //adding minercoin scores from minerobber to base amount
   {
-    std::string command_to_exec = std::string(MINERCOIN_CMD_PRE_USERNAME) + get_username() + std::string(MINERCOIN_CMD_POST_USERNAME);
-    std::string number_of_tildes = exec(command_to_exec.c_str());
-    number_of_tildes.pop_back();
-    //to get rid of the newline at the end
-    if(is_number(number_of_tildes.c_str()))
-      minercoin_amount += strtol100(number_of_tildes.c_str());
-      base_amount += minercoin_amount;
+    std::string command_to_exec, minercoin_cmd_pre_username, number_of_tildes, username(get_username());
+    username.at(0) = username.at(0)+'a'-'A';
+    const std::string minercoin_cmd_post_username(MINERCOIN_CMD_POST_USERNAME), lowercase_username(username);
+    //adding minercoin scores from minerobber to base amount (from "~username" and "username", both, in minerbot)
+    #if DEBUG
+      debug_string += lowercase_username;
+    #endif
+    for(int i=0; i<2; ++i)
+    {
+      if(i == 0)
+        minercoin_cmd_pre_username.assign(MINERCOIN_CMD_PRE_USERNAME);
+      else if(i == 1)
+        minercoin_cmd_pre_username.assign(MINERCOIN_CMD_PRE_USERNAME2);
+
+      command_to_exec = minercoin_cmd_pre_username + lowercase_username + minercoin_cmd_post_username;
+      number_of_tildes = exec(command_to_exec.c_str());
+      number_of_tildes.pop_back();
+      //to get rid of the newline at the end
+      if(is_number(number_of_tildes.c_str()))
+      {
+        minercoin_amount[i] += strtol100(number_of_tildes.c_str());
+        base_amount += minercoin_amount[i];
+      }
       //multiplied by 100 to convert tildecoins to centitildecoins, which
       //is the unit used throughout the program (and converted appropriately when displayed)
+    }
   }
   #endif
 
@@ -1775,8 +1980,14 @@ int main(int argc, char *argv[])
   {
     std::cout << "total,";
     cout_formatted_amount(total_amount, ";", ";");
-    show_breakdown(unaltered_base_amount, "baseamount", user_amount, "transfers", krowbar_amount, "tildegame", minercoin_amount, "minercoin");
+    show_breakdown(unaltered_base_amount, "baseamount", user_amount, "transfers", krowbar_amount[0], "tildegame", krowbar_amount[1], "jugame", minercoin_amount[0]+minercoin_amount[1], "minercoingame");
   }
+  #if DEBUG
+    else if(!strcmp(argv[1], "debug_string"))
+    {
+      std::cout << debug_string;
+    }
+  #endif
   else if(!strcmp(argv[1], "messages") || !strcmp(argv[1], "-m"))
   {
     double number_of_messages = 0.0;
@@ -1854,6 +2065,11 @@ int main(int argc, char *argv[])
       else
         return_value2 = add_internal_balance(argv[3], strtol100(argv[2]));
 
+      if(return_value == ERR_ADD_INTERNAL_BALANCE_ADD_TO_SELF || return_value2 == ERR_ADD_INTERNAL_BALANCE_ADD_TO_SELF) //cannot add to self internal balance
+      {
+        std::cout << "\nSorry, you cannot add to your own internal balance.\n\n";
+        return ERR_ADD_INTERNAL_BALANCE_ADD_TO_SELF;
+      }
       if(return_value == ERR_ADD_INTERNAL_BALANCE_VALUE_TO_ADD_UNFULFILLABLE_USING_OWN_CURRENT_FUNDS || return_value2 == ERR_ADD_INTERNAL_BALANCE_VALUE_TO_ADD_UNFULFILLABLE_USING_OWN_CURRENT_FUNDS) //value_to_add was too large
       {
         std::cout << "\nSorry, the amount was larger than what the program's current unowed balance could cover.\n\n";
@@ -2045,10 +2261,28 @@ int main(int argc, char *argv[])
       }
       return_value = send(get_username().c_str(), receiver, amount, base_amount, "silent");
       if(!return_value) //send was successful
-        send_message(get_username().c_str(), argv[3], argv[4], strtol100(argv[2]), "silent");
+        send_message(get_username().c_str(), receiver, argv[4], amount, "silent");
     }
     else
       return ERR_SILENTSEND;
+  }
+  else if(!strcmp(argv[1], "refresh_key") || !strcmp(argv[1], "-rk"))
+  {
+    std::string new_key;
+
+    new_key.assign(refresh_pcoin_key());
+
+    if(!new_key.compare("n/a") || new_key.length() != 64)
+    {
+      std::cout << "\nSorry, key was not refreshed.\n\n"; //make sure this is less than 64 characters
+      return ERR_PCOIN_KEY_REFRESH_FAILED;
+    }
+    else
+      std::cout << new_key << "\n";
+  }
+  else if(!strcmp(argv[1], "name") || !strcmp(argv[1], "-n"))
+  {
+    std::cout << get_username() << "\n";
   }
   else
   {
